@@ -6,49 +6,77 @@ namespace TheoryOfAlg_lab3;
 
 public static class Program
 {
-    private const string Path = "/home/karlenko/projects/csharp/TheoryOfAlg_lab3/TheoryOfAlg_lab3/UserData/UsersDataBase.db";
-    private const int UserAmount = 10000;
+    private const string PathDB = "/home/karlenko/projects/csharp/TheoryOfAlg_lab3/TheoryOfAlg_lab3/UserData/UsersDataBase.db";
+    private const string PathMeta = "/home/karlenko/projects/csharp/TheoryOfAlg_lab3/TheoryOfAlg_lab3/UserData/MetadataOfDB.db";
+    private const int UserAmount = 1000;
     
-    static void GenerateDataBase(int amountOfUser = UserAmount, string path = Path)
+    static void GenerateDataBase(int amountOfUser = UserAmount, string path = PathDB)
     {
         var hashTable = new HashTable<StringHash, User>(UserAmount, false);
+        var hashMetaTable = new HashTable<ushort, Metadata>(UserAmount, false);
+
+        ulong offset = 0;
         for (int i = 0; i < amountOfUser; i++)
         {
             StringHash genEmail = new StringHash("email" + i + "@gmail.com");
             hashTable[genEmail] = new User("User" + i , genEmail.ToString(), (byte) (1 + i % 87));
         }
+
+        int counter = 0;
+        foreach (var elem in hashTable)
+        {
+            ushort index = (ushort)hashTable.CalcIndexByKey(new StringHash(elem.Email));
+            hashMetaTable[index] = new Metadata(index, offset);
+
+            hashMetaTable[(ushort)counter] = new Metadata((ushort)counter, 0);
+            if (!hashMetaTable.ContainsKey(index))
+            {
+                hashMetaTable[(ushort)counter] = new Metadata((ushort)counter, 0);
+            }
+            
+            offset += User.SerializedBytesPerUser;
+            counter++;
+        }
         
+        //hashMetaTable.PrintBuckets();
         //hashTable.PrintBuckets();
 
         using (var file = File.OpenWrite(path))
         {
-            foreach (User elem in hashTable)
+            foreach (var elem in hashTable)
             {
                 file.Write(elem.Serialize());
             }
         }
-        
-        Console.WriteLine("[?] DataBase successfully generated.");
-    }
 
-    static void ReadFromDataBase(int amountOfUser, string path = Path)
-    {
-        using (var file = File.OpenRead(path))
+        using (var fileMeta = File.OpenWrite(PathMeta))
         {
-            byte[] buffer = new byte[User.SerializedBytesPerUser];
-            for (int i = 0; i < amountOfUser; i++)
+            foreach (var meta in hashMetaTable)
             {
-                file.Read(buffer);
-                Console.WriteLine(User.Deserialize(buffer));
+                fileMeta.Write(meta.Serialize());
             }
         }
+
+        Console.WriteLine("[?] DataBase successfully generated.\n");
     }
 
-    static User RandomAccessFromDataBase(int userIndex, string path = Path)
+    static ulong GetHashValueOffset(int hashValue)
+    {
+        using (var file = new BinaryReader(File.OpenRead(PathMeta)))
+        {
+            file.BaseStream.Seek(hashValue * Metadata.MetaBlockBytes, SeekOrigin.Begin);
+         
+            byte[] buffer = new byte[Metadata.MetaBlockBytes];
+            file.Read(buffer);
+            return Metadata.Deserialize(buffer).Offset;
+        }
+    }
+    
+    static User RandomAccessFromDataBase(int hashValue, int userIndex = 0, string path = PathDB)
     {
         using (var file = new BinaryReader(File.OpenRead(path)))
         {
-            file.BaseStream.Seek(userIndex * User.SerializedBytesPerUser, SeekOrigin.Begin);
+            file.BaseStream.Seek((long)GetHashValueOffset(hashValue) + userIndex * User.SerializedBytesPerUser, SeekOrigin.Begin);
          
             byte[] buffer = new byte[User.SerializedBytesPerUser];
             file.Read(buffer);
@@ -60,12 +88,13 @@ public static class Program
     {
         StringHash emailHash = new StringHash(email);
         var hashTable = new HashTable<StringHash, User>(UserAmount, false);
-        int index = hashTable.CalcIndexByKey(emailHash) < 8 ? hashTable.CalcIndexByKey(emailHash) : hashTable.CalcIndexByKey(emailHash) - 8;
+        int hashValue = hashTable.CalcIndexByKey(emailHash);
+        int index = 0;
         User output = null;
 
         do
         {
-            output = RandomAccessFromDataBase(index++);
+            output = RandomAccessFromDataBase(hashValue, index++);
             if (index > UserAmount)
                 return null;
         } while (!emailHash.Equals(output.Email)); 
@@ -73,21 +102,33 @@ public static class Program
         return output;
     }
 
-    static string GetUserInfoByEmail(string email)
+    static string GetUserInfoByEmail(string email, ref int successCount)
     {
         User? findUserByEmail = FindUserInfoByEmail(email);
         string answer = "";
-        
-        answer = findUserByEmail != null 
-            ? findUserByEmail.ToString() 
-            : $"[!] Cannot find user with this email: {email}.";
+
+        if (findUserByEmail != null)
+        {
+            answer = findUserByEmail.ToString();
+            successCount++;
+        }
+        else
+        {
+            answer = $"[!] Cannot find user with this email: {email}.";
+        }
 
         return answer;
     }
 
     public static void Main()
     {
-        //GenerateDataBase();
-        Console.WriteLine(GetUserInfoByEmail("email4437@gmail.com"));
+        GenerateDataBase();
+        
+        int successCount = 0;
+        for (int i = 0; i < UserAmount; i++)
+        {
+            GetUserInfoByEmail($"email{i}@gmail.com", ref successCount);
+        }
+        Console.WriteLine($"{successCount} / {UserAmount}");
     }
 }
