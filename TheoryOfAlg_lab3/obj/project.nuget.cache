@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "dgSpecHash": "EfEBpfXxJ7AR843aTLnDssLgfKQtH2aSAF6KRyTUW9QZAR4R46UD25BsQGwAXj/o0y27qu9HOySThgTr7ajIgA==",
+  "success": true,
+  "projectFilePath": "/home/karlenko/projects/csharp/TheoryOfAlg_lab3/TheoryOfAlg_lab3/TheoryOfAlg_lab3.csproj",
+  "expectedPackageFiles": [
+    "/home/karlenko/.nuget/packages/microsoft.aspnetcore.app.ref/7.0.0/microsoft.aspnetcore.app.ref.7.0.0.nupkg.sha512"
+  ],
+  "logs": []
+}
